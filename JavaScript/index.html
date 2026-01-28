@@ -147,11 +147,27 @@
             object-fit: cover;
             border-radius: 4px;
             border: 1px solid #dee2e6;
+            background: #f8f9fa;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .product-image[src=""],
+        .product-image:not([src]) {
+            opacity: 0;
         }
 
         .image-cell {
             width: 80px;
             text-align: center;
+        }
+
+        #products-container {
+            min-height: 200px;
+        }
+
+        #products-container:empty {
+            display: none;
         }
     </style>
 </head>
@@ -169,7 +185,7 @@
 
         <div id="error" class="error" style="display: none;"></div>
 
-        <div id="products-container"></div>
+        <div id="products-container" style="display: none;"></div>
     </div>
 
     <script>
@@ -184,6 +200,12 @@
             const productsContainer = document.getElementById('products-container');
             const statsEl = document.getElementById('stats');
             const productCountEl = document.getElementById('product-count');
+
+            // Ẩn tất cả các phần tử trước
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            productsContainer.style.display = 'none';
+            statsEl.style.display = 'none';
 
             try {
                 let products = null;
@@ -221,7 +243,7 @@
                     throw new Error('Dữ liệu không hợp lệ');
                 }
                 
-                // Ẩn loading
+                // Ẩn loading và hiển thị kết quả
                 loadingEl.style.display = 'none';
                 
                 // Hiển thị số lượng sản phẩm
@@ -236,8 +258,16 @@
                 loadingEl.style.display = 'none';
                 errorEl.style.display = 'block';
                 errorEl.textContent = `Lỗi khi tải dữ liệu: ${error.message}`;
+                productsContainer.style.display = 'none';
                 console.error('Error fetching products:', error);
             }
+        }
+
+        // Hàm xử lý lỗi ảnh
+        function handleImageError(img) {
+            img.onerror = null; // Tránh lặp vô hạn
+            img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50"%3E%3Crect width="50" height="50" fill="%23e9ecef"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="10" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
+            img.style.opacity = '1';
         }
 
         // Hàm hiển thị sản phẩm dưới dạng bảng
@@ -246,8 +276,12 @@
             
             if (!products || products.length === 0) {
                 container.innerHTML = '<div class="error">Không có sản phẩm nào</div>';
+                container.style.display = 'block';
                 return;
             }
+
+            // Clear container trước
+            container.innerHTML = '';
 
             // Tạo bảng HTML
             let tableHTML = `
@@ -274,9 +308,22 @@
                 const slug = product.slug || '';
                 const price = product.price || 0;
                 const description = product.description || 'Không có mô tả';
-                const imageUrl = (product.images && Array.isArray(product.images) && product.images.length > 0) 
-                    ? product.images[0] 
-                    : 'https://via.placeholder.com/50x50?text=No+Image';
+                
+                // Xử lý URL ảnh - kiểm tra và làm sạch
+                let imageUrl = '';
+                if (product.images && Array.isArray(product.images) && product.images.length > 0) {
+                    imageUrl = product.images[0];
+                    // Kiểm tra nếu URL hợp lệ
+                    if (!imageUrl || imageUrl.trim() === '' || imageUrl === 'null' || imageUrl === 'undefined') {
+                        imageUrl = '';
+                    }
+                }
+                
+                // Nếu không có ảnh, dùng placeholder
+                if (!imageUrl) {
+                    imageUrl = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="50" height="50"%3E%3Crect width="50" height="50" fill="%23e9ecef"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" font-family="Arial" font-size="10" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
+                }
+                
                 const categoryName = product.category && typeof product.category === 'object' 
                     ? product.category.name 
                     : (product.category || '');
@@ -286,21 +333,29 @@
                     ? description.substring(0, 50) + '...' 
                     : description;
 
+                // Escape HTML để tránh XSS
+                const escapeHtml = (text) => {
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                };
+
                 // Tạo hàng trong bảng
                 tableHTML += `
                     <tr>
-                        <td class="product-id">${productId}</td>
-                        <td class="product-title">${title}</td>
-                        <td class="product-slug">${slug || '-'}</td>
+                        <td class="product-id">${escapeHtml(String(productId))}</td>
+                        <td class="product-title">${escapeHtml(title)}</td>
+                        <td class="product-slug">${escapeHtml(slug || '-')}</td>
                         <td class="product-price">$${price.toLocaleString()}</td>
-                        <td class="product-description" title="${description}">${shortDescription}</td>
-                        <td><span class="product-category">${categoryName || '-'}</span></td>
+                        <td class="product-description" title="${escapeHtml(description)}">${escapeHtml(shortDescription)}</td>
+                        <td><span class="product-category">${escapeHtml(categoryName || '-')}</span></td>
                         <td class="image-cell">
                             <img 
                                 src="${imageUrl}" 
-                                alt="${title}"
+                                alt="${escapeHtml(title)}"
                                 class="product-image"
-                                onerror="this.src='https://via.placeholder.com/50x50?text=No+Image'"
+                                loading="lazy"
+                                onerror="handleImageError(this)"
                             >
                         </td>
                     </tr>
@@ -312,7 +367,17 @@
                 </table>
             `;
 
+            // Set innerHTML và hiển thị
             container.innerHTML = tableHTML;
+            container.style.display = 'block';
+            
+            // Xử lý lỗi ảnh sau khi render
+            const images = container.querySelectorAll('.product-image');
+            images.forEach(img => {
+                img.addEventListener('error', function() {
+                    handleImageError(this);
+                });
+            });
         }
 
         // Gọi hàm fetch khi trang được tải
