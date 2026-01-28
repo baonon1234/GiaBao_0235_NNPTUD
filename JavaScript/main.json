@@ -1,0 +1,5 @@
+{
+  "api_url": "https://api.escuelajs.co/api/v1/products",
+  "description": "File cấu hình API endpoint cho ứng dụng hiển thị sản phẩm"
+}
+
