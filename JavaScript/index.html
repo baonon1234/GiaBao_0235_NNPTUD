@@ -161,8 +161,9 @@
     <script>
         // API endpoint
         const API_URL = 'https://api.escuelajs.co/api/v1/products';
+        const LOCAL_JSON = 'main.json';
 
-        // Hàm fetch dữ liệu từ API
+        // Hàm fetch dữ liệu từ API hoặc local file
         async function fetchProducts() {
             const loadingEl = document.getElementById('loading');
             const errorEl = document.getElementById('error');
@@ -171,15 +172,40 @@
             const productCountEl = document.getElementById('product-count');
 
             try {
-                // Fetch dữ liệu từ API
-                const response = await fetch(API_URL);
+                let products = null;
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                // Thử fetch từ API trước
+                try {
+                    const response = await fetch(API_URL);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
 
-                // Convert JSON response thành JavaScript objects
-                const products = await response.json();
+                    // Convert JSON response thành JavaScript objects
+                    products = await response.json();
+                    console.log('Đã tải dữ liệu từ API:', products.length, 'sản phẩm');
+                } catch (apiError) {
+                    console.warn('Không thể tải từ API, thử load từ local file:', apiError.message);
+                    
+                    // Nếu API lỗi, thử load từ local file
+                    try {
+                        const localResponse = await fetch(LOCAL_JSON);
+                        if (localResponse.ok) {
+                            products = await localResponse.json();
+                            console.log('Đã tải dữ liệu từ local file:', products.length, 'sản phẩm');
+                        } else {
+                            throw new Error('Không thể tải file local');
+                        }
+                    } catch (localError) {
+                        throw new Error(`Không thể tải dữ liệu từ API hoặc file local: ${apiError.message}`);
+                    }
+                }
+                
+                // Kiểm tra dữ liệu
+                if (!products || !Array.isArray(products)) {
+                    throw new Error('Dữ liệu không hợp lệ');
+                }
                 
                 // Ẩn loading
                 loadingEl.style.display = 'none';
@@ -211,25 +237,33 @@
 
             // Tạo HTML cho mỗi sản phẩm
             container.innerHTML = products.map(product => {
+                // Lấy thông tin từ product object
+                const productId = product.id || '';
+                const title = product.title || 'Không có tên';
+                const slug = product.slug || '';
+                const price = product.price || 0;
+                const description = product.description || 'Không có mô tả';
+                const imageUrl = (product.images && Array.isArray(product.images) && product.images.length > 0) 
+                    ? product.images[0] 
+                    : 'https://via.placeholder.com/300x200?text=No+Image';
+                const categoryName = product.category && typeof product.category === 'object' 
+                    ? product.category.name 
+                    : (product.category || '');
+
                 // Convert product object thành HTML card
                 return `
-                    <div class="product-card">
+                    <div class="product-card" data-id="${productId}" data-slug="${slug}">
                         <img 
-                            src="${product.images && product.images[0] ? product.images[0] : 'https://via.placeholder.com/300x200?text=No+Image'}" 
-                            alt="${product.title || 'Product'}"
+                            src="${imageUrl}" 
+                            alt="${title}"
                             class="product-image"
                             onerror="this.src='https://via.placeholder.com/300x200?text=No+Image'"
                         >
                         <div class="product-info">
-                            <h3 class="product-title">${product.title || 'Không có tên'}</h3>
-                            <p class="product-description">${product.description || 'Không có mô tả'}</p>
-                            <div class="product-price">$${product.price || 0}</div>
-                            ${product.category ? `<span class="product-category">${product.category.name || product.category}</span>` : ''}
-                            ${product.rating ? `
-                                <div class="product-rating">
-                                    ⭐ ${product.rating}
-                                </div>
-                            ` : ''}
+                            <h3 class="product-title">${title}</h3>
+                            <p class="product-description">${description}</p>
+                            <div class="product-price">$${price.toLocaleString()}</div>
+                            ${categoryName ? `<span class="product-category">${categoryName}</span>` : ''}
                         </div>
                     </div>
                 `;
